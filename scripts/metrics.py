@@ -30,7 +30,7 @@ def get_kde_iqr(kde, x_values):
     return q1, q3
 
 
-# Use glob to find all *_pdb_stats.txt files in the specified directory
+# Use glob to find all *_pdb_stats.txt files in the specified directory. This has 
 pdb_stats_files = glob.glob('*_pdb_stats.txt')
 
 # Initialize a list to store the DataFrames
@@ -49,20 +49,18 @@ for file in pdb_stats_files:
 
 # Concatenate all DataFrames into a single DataFrame
 all_pdb_stats_data = pd.concat(pdb_stats_dfs, ignore_index=True)
+
+#Clean up files
 all_pdb_stats_data.rename(columns={'PDB ID': 'PDB'}, inplace=True)
-
-
-# Convert RFree to numeric, replacing 'None' with NaN
 all_pdb_stats_data['RFree'] = pd.to_numeric(all_pdb_stats_data['RFree'], errors='coerce')
 
 close_resi = pd.read_csv('close_resi.csv', sep=',', dtype={'resi': 'int32', 'chain': 'str', 'PDB': 'str'})
-# Remove spaces before numbers in 'resi' column
-#close_resi['resi'] = close_resi['resi'].astype(str).str.strip()
 
 # Use glob to find all *_residue_metrics.txt files in the specified directory
-b = glob.glob('*_residue_metrics.txt')
+###_____________________________________________###
+# These files include information on a residue basis for RSCCS, OPIA, EDIAm, RSR, SRSR
 
-# Initialize a list to store the DataFrames
+b = glob.glob('*_residue_metrics.txt')
 dfs = []
 
 # Loop through each file and read it into a DataFrame
@@ -85,23 +83,10 @@ for file in b:
 # Concatenate all DataFrames into a single DataFrame
 residue_metrics = pd.concat(dfs, ignore_index=True)
 
-# Display the first few rows of the combined DataFrame
-residue_metrics = residue_metrics.rename(columns={'seqNum': 'resi', 'AsymID': 'chain'})
-residue_metrics['PDB'] = residue_metrics['PDB'].str.upper()
-
-
 # Clean up column names
 residue_metrics = residue_metrics.rename(columns={'seqNum': 'resi', 'AsymID': 'chain'})
-
-
-# Now perform the merge with consistent data types
-#close_resi_metrics = pd.merge(close_resi[['resi', 'chain', 'PDB']], residue_metrics[['resi', 'chain', 'PDB', 'RSCCS', 'OPIA', 'EDIAm', 'RSR', 'SRSR']], 
-#                            on=['resi', 'chain', 'PDB'], how='inner')
-
-close_resi_metrics = dd.merge(close_resi[['resi', 'chain', 'PDB']], 
-                                 residue_metrics[['resi', 'chain', 'PDB', 'RSCCS', 'OPIA', 'EDIAm', 'RSR', 'SRSR']],
-                                 on=['resi', 'chain', 'PDB'], how='inner')
-close_resi_metrics = close_resi_metrics.drop_duplicates()
+residue_metrics['PDB'] = residue_metrics['PDB'].str.upper()
+residue_metrics = residue_metrics.rename(columns={'seqNum': 'resi', 'AsymID': 'chain'})
 
 results = []
 for pdb, group in close_resi_metrics.groupby('PDB'):
@@ -177,10 +162,6 @@ combined_metrics.to_csv('combined_metrics.csv')
 # Merge combined_metrics with all_pdb_stats_data (which contains resolution and Rfree) in one step
 combined_metrics2 = pd.merge(combined_metrics, all_pdb_stats_data[['PDB', 'Resolution', 'RFree']], on='PDB')
 
-
-combined_metrics = combined_metrics.dropna()
-del residue_metrics
-del close_resi_metrics
 
 # Plot and compute statistics for each metric
 for metric in ['RSCCS_med', 'OPIA_med', 'EDIA_med', 'RSR_med', 'SRSR_med', 'RSCCS_mean', 'OPIA_mean', 'EDIA_mean', 'RSR_mean', 'SRSR_mean']:
