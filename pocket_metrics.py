@@ -2,22 +2,21 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+
 import os
 import glob
+
 from scipy import stats
+from scipy.stats import ttest_rel
+
 import Bio.PDB
 from Bio.PDB import *
-from scipy.stats import ttest_rel
-import gc
-import dask.dataframe as dd
 
-print('######################################################################################')
-print('_________________________________POCKET_______________________________________________')
 
 plt.rcParams.update({'font.size': 30})
 
 # Use glob to find all *_pdb_stats.txt files in the specified directory
-pdb_stats_files = glob.glob('/dors/wankowicz_lab/PDBRedo/pdb-redo3/output/*_pdb_stats.txt')
+pdb_stats_files = glob.glob('*_pdb_stats.txt')
 
 # Initialize a list to store the DataFrames
 pdb_stats_dfs = []
@@ -43,13 +42,13 @@ all_pdb_stats_data['RFree'] = pd.to_numeric(all_pdb_stats_data['RFree'], errors=
 
 close_resi = pd.read_csv('pocket_resi_close.csv', sep=',', dtype={'resi': 'int32', 'chain': 'str', 'PDB': 'str'})
 close_resi = close_resi.rename(columns={'Resi': 'resi'})
-close_resi['chain'] = 'A'
 close_resi['PDB'] = close_resi['PDB'].str.upper()
+
 # Remove spaces before numbers in 'resi' column
 #close_resi['resi'] = close_resi['resi'].astype(str).str.strip()
 
 # Use glob to find all *_residue_metrics.txt files in the specified directory
-b = glob.glob('/dors/wankowicz_lab/PDBRedo/pdb-redo3/output/*_residue_metrics.txt')
+b = glob.glob('*_residue_metrics.txt')
 
 # Initialize a list to store the DataFrames
 dfs = []
@@ -78,26 +77,11 @@ residue_metrics = pd.concat(dfs, ignore_index=True)
 residue_metrics = residue_metrics.rename(columns={'seqNum': 'resi', 'AsymID': 'chain'})
 residue_metrics['PDB'] = residue_metrics['PDB'].str.upper()
 
-
 # Clean up column names
 residue_metrics = residue_metrics.rename(columns={'seqNum': 'resi', 'AsymID': 'chain'})
 
 
-gc.collect()
-# Now perform the merge with consistent data types
-#close_resi_metrics = pd.merge(close_resi[['resi', 'chain', 'PDB']], residue_metrics[['resi', 'chain', 'PDB', 'RSCCS', 'OPIA', 'EDIAm', 'RSR', 'SRSR']], 
-#                            on=['resi', 'chain', 'PDB'], how='inner')
-
-print(close_resi.head())
-
-close_resi_metrics = dd.merge(close_resi[['resi', 'chain', 'PDB']], 
-                                 residue_metrics[['resi', 'chain', 'PDB', 'RSCCS', 'OPIA', 'EDIAm', 'RSR', 'SRSR']],
-                                 on=['resi', 'chain', 'PDB'], how='inner')
-
-print(residue_metrics.head())
-
 close_resi_metrics = close_resi_metrics.drop_duplicates()
-print(close_resi_metrics.head())
 
 results = []
 for pdb, group in close_resi_metrics.groupby('PDB'):
@@ -163,26 +147,14 @@ for pdb, group in not_close_resi_metrics.groupby('PDB'):
 
 # Convert the results list to a DataFrame
 metrics_not_close = pd.DataFrame(results)
-metrics_not_close.to_csv('metrics_not_pocket.csv')                               
+metrics_not_close.to_csv('metrics_not_pocket.csv')    
+
 # Filter residue_metrics by PDBs present in close_resi_metrics, this reduces the size of residue_metrics
 residue_metrics = metrics_not_close[metrics_not_close['PDB'].isin(close_resi_metrics['PDB'])]
 
 # Perform one merge between close_resi_metrics and filtered residue_metrics, including all necessary columns
 combined_metrics = pd.merge(metrics_close, metrics_not_close, on=['PDB'], suffixes=('_close', '_all'))
 combined_metrics.to_csv('combined_metrics_pocket.csv')
-
-
-
-# Merge combined_metrics with all_pdb_stats_data (which contains resolution and Rfree) in one step
-combined_metrics2 = pd.merge(combined_metrics, all_pdb_stats_data[['PDB', 'Resolution', 'RFree']], on='PDB')
-
-
-combined_metrics = combined_metrics.dropna()
-#residue_metrics = residue_metrics[residue_metrics['PDB'].isin(close_resi_metrics['PDB'])]
-#combined_metrics = pd.merge(close_resi_metrics, residue_metrics, on='PDB', suffixes=('_close', '_all'))
-#combined_metrics = pd.merge(combined_metrics, all_pdb_stats_data[['PDB', 'resolution', 'Rfree']], on='PDB')
-del residue_metrics
-del close_resi_metrics
 
 # Plot and compute statistics for each metric
 for metric in ['RSCCS_med', 'OPIA_med', 'EDIA_med', 'RSR_med', 'SRSR_med', 'RSCCS_mean', 'OPIA_mean', 'EDIA_mean', 'RSR_mean', 'SRSR_mean']:
@@ -195,7 +167,6 @@ for metric in ['RSCCS_med', 'OPIA_med', 'EDIA_med', 'RSR_med', 'SRSR_med', 'RSCC
     plt.legend(['All Residues', 'Pocket Residues'],fontsize=12)
     plt.savefig(f"{metric}_pocket_distribution.png")
     plt.close(fig)
-    
 
     # Calculate and print statistical information
     mean = combined_metrics[f'{metric}_all'].mean()
